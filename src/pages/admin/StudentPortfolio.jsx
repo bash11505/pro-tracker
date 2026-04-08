@@ -1,22 +1,35 @@
-import { useState, useEffect } from 'react';
-import { Briefcase, Mail, MapPin, Link as LinkIcon, Download, Share2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Briefcase, Mail, MapPin, Link as LinkIcon, Download, Share2, ArrowLeft } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { useAuth } from '../../context/AuthContext';
-import { projectService } from '../../services/api';
+import { projectService, userService } from '../../services/api';
 
-export function Portfolio() {
-    const { user } = useAuth();
+export function StudentPortfolio() {
+    const navigate = useNavigate();
+    const { id } = useParams();
+    const [user, setUser] = useState(null);
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        projectService.getAll()
-            .then(res => setProjects(res.data.projects.filter(p => p.status === 'Completed')))
-            .catch(err => console.error('Failed to load projects:', err))
-            .finally(() => setLoading(false));
-    }, []);
+        let active = true;
+        Promise.all([
+            userService.getById(id),
+            projectService.getAll(),
+        ])
+            .then(([userRes, projectsRes]) => {
+                if (!active) return;
+                setUser(userRes.data.user);
+                const allProjects = projectsRes.data.projects || [];
+                setProjects(allProjects.filter(p => p.user_id === parseInt(id, 10) && p.status === 'Completed'));
+            })
+            .catch(err => console.error('Failed to load student portfolio:', err))
+            .finally(() => active && setLoading(false));
+
+        return () => { active = false; };
+    }, [id]);
 
     if (loading) {
         return (
@@ -26,8 +39,19 @@ export function Portfolio() {
         );
     }
 
+    if (!user) {
+        return <div className="text-center py-20 text-text-secondary-light">Student not found.</div>;
+    }
+
     return (
         <div className="max-w-6xl mx-auto space-y-8">
+            <button
+                onClick={() => navigate('/admin/students')}
+                className="flex items-center gap-2 text-text-secondary-light dark:text-text-secondary-dark hover:text-primary transition-colors text-sm font-medium"
+            >
+                <ArrowLeft className="w-4 h-4" /> Back to Students
+            </button>
+
             {/* Hero Section */}
             <div className="relative rounded-3xl border-2 border-gray-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden bg-primary h-64 md:h-80">
                 <div className="absolute inset-0 bg-gradient-to-r from-primary to-accent/90"></div>
@@ -39,7 +63,7 @@ export function Portfolio() {
                 <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start md:items-end">
                     <div className="relative">
                         <img
-                            src={user?.avatar_url ? user.avatar_url : `https://api.dicebear.com/7.x/notionists/svg?seed=${user?.full_name || 'Felix'}&backgroundColor=b6e3f4`}
+                            src={user?.avatar_url ? user.avatar_url : `https://api.dicebear.com/7.x/notionists/svg?seed=${user?.full_name || 'Student'}&backgroundColor=b6e3f4`}
                             alt="Student"
                             className="w-32 h-32 md:w-40 md:h-40 rounded-3xl border-4 border-background-light dark:border-background-dark bg-white"
                         />
@@ -68,7 +92,7 @@ export function Portfolio() {
                             <div>
                                 <h3 className="text-lg font-bold text-text-main-light dark:text-white mb-3">About Me</h3>
                                 <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark leading-relaxed">
-                                    {user?.bio || 'No bio provided yet. Update your profile in Settings!'}
+                                    {user?.bio || 'No bio provided yet.'}
                                 </p>
                             </div>
 
@@ -91,10 +115,9 @@ export function Portfolio() {
                             </div>
                         </CardContent>
                     </Card>
-
                 </div>
 
-                {/* Right Column - Highlighted Projects */}
+                {/* Right Column - Completed Projects */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="flex items-center justify-between px-2">
                         <h3 className="text-xl font-bold text-text-main-light dark:text-white">Completed Projects ({projects.length})</h3>
@@ -102,7 +125,7 @@ export function Portfolio() {
 
                     {projects.length === 0 && (
                         <div className="text-center py-16">
-                            <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">No completed projects yet. Keep working!</p>
+                            <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">No completed projects yet.</p>
                         </div>
                     )}
 
